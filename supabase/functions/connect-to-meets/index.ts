@@ -1,81 +1,17 @@
-import { API_BASE_URL, API_TOKEN, OPENAI_API_KEY } from '../utils/api.ts';
+import { serve } from "https://deno.land/std@0.182.0/http/server.ts";
+import { API_BASE_URL, API_TOKEN } from '../utils/api.ts';
+import { processNewConversation } from '../services/ticket-service.ts';
 
-async function getChatResponse(transcript: string) {
-  try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: "gpt-3.5-turbo",
-        messages: [
-          {
-            role: "system",
-            content: "You are MeetingMind, a helpful AI assistant in a meeting. Keep your responses concise and professional."
-          },
-          {
-            role: "user",
-            content: transcript
-          }
-        ],
-        temperature: 0.7,
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`OpenAI API request failed: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data.choices[0].message.content;
-  } catch (error) {
-    console.error('OpenAI Chat API Error:', error);
-    return "I apologize, but I'm having trouble processing your request at the moment.";
-  }
+interface TicketAnalysis {
+  type_of_action: 'create_new_ticket' | 'update_ticket' | 'none';
 }
 
-async function analyzeTranscript(transcript: string) {
-  try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: "gpt-3.5-turbo",
-        messages: [
-          {
-            role: "system",
-            content: "You are analyzing meeting transcripts. Respond with 'true' if someone is directly addressing or asking a question to 'MeetingMind', and 'false' otherwise."
-          },
-          {
-            role: "user",
-            content: transcript
-          }
-        ],
-        temperature: 0.1,
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`OpenAI API request failed: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data.choices[0].message.content.toLowerCase().includes('true');
-  } catch (error) {
-    console.error('OpenAI API Error:', error);
-    return false;
-  }
-}
-
-async function* pollTranscript(botId: string) {
+async function* pollTranscript(botId: string, signal: AbortSignal) {
   let lastTranscript = '';
+  let windowContext = '';
+  console.log('Started polling for bot:', botId);
 
-  while (true) {
+  while (!signal.aborted) {
     try {
       const response = await fetch(`${API_BASE_URL}/bots/${botId}/transcript`, {
         headers: {
@@ -88,38 +24,44 @@ async function* pollTranscript(botId: string) {
         throw new Error(`API request failed with status ${response.status}`);
       }
 
-      const data = await response.json();
-      const currentTranscript = data.transcript || '';
+      const data = await response.json();   
+      console.log('Data:', data);
       
-      // Only analyze new content
+      const currentTranscript = data.map(item => `${item.speaker_name}: ${item.transcription.transcript}\n`).join('') || '';
+      console.log('Current transcript: \n', currentTranscript);
+
       if (currentTranscript && currentTranscript !== lastTranscript) {
-        const newContent = currentTranscript.slice(lastTranscript.length);
-        const isBotAddressed = await analyzeTranscript(newContent);
+        try {
+          // Process new conversation using the service
+          const result = await processNewConversation(
+            currentTranscript.slice(lastTranscript.length),
+            windowContext
+          );
 
-        if (isBotAddressed) {
-          // Get bot's response
-          const botResponse = await getChatResponse(newContent);
-          
-          yield {
-            type: 'bot_addressed',
-            transcript: newContent,
-            response: botResponse,
-            timestamp: new Date().toISOString()
-          };
+          if (result.type === 'ticket_created' && result.ticket) {
+            yield {
+              type: 'ticket_created',
+              ticket: result.ticket
+            };
+          }
+
+          // Update window context
+          windowContext = currentTranscript;
+          lastTranscript = currentTranscript;
+        } catch (error) {
+          console.error('Error processing conversation:', error);
         }
-
-        lastTranscript = currentTranscript;
       }
 
-      // Still yield the regular transcript data
-      yield {
-        type: 'transcript',
-        ...data
-      };
-
-      // Wait 5 seconds before next poll
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await Promise.race([
+        new Promise(resolve => setTimeout(resolve, 5000)),
+        new Promise((_, reject) => signal.addEventListener('abort', () => reject(new Error('Polling aborted'))))
+      ]);
     } catch (error) {
+      if (signal.aborted) {
+        console.log('Polling stopped');
+        break;
+      }
       console.error('Polling error:', error);
       yield { 
         type: 'error',
@@ -130,11 +72,36 @@ async function* pollTranscript(botId: string) {
       await new Promise(resolve => setTimeout(resolve, 5000));
     }
   }
+  console.log('Polling ended for bot:', botId);
 }
 
-Deno.serve(async (req) => {
+async function leaveMeeting(botId: string) {
   try {
-    const { meeting_url, bot_name = 'MeetingMind' } = await req.json();
+    const response = await fetch(`${API_BASE_URL}/bots/${botId}/leave`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${API_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to leave meeting: ${response.status}`);
+    }
+    console.log(`Bot ${botId} has left the meeting`);
+  } catch (error) {
+    console.error('Error making bot leave:', error);
+  }
+}
+
+serve(async (req) => {
+  let botId: string;
+  let controller: ReadableStreamDefaultController;
+  const abortController = new AbortController();
+  
+  try {
+    const { meeting_url, bot_name = 'Kurt' } = await req.json();
+    console.log('Received request:', { meeting_url, bot_name });
 
     if (!meeting_url) {
       return new Response(
@@ -147,6 +114,7 @@ Deno.serve(async (req) => {
     }
 
     // Create the bot
+    console.log('Creating bot...');
     const response = await fetch(`${API_BASE_URL}/bots`, {
       method: 'POST',
       headers: {
@@ -164,24 +132,48 @@ Deno.serve(async (req) => {
     }
 
     const botData = await response.json();
-    const botId = botData.id;
+    botId = botData.id;
 
     // Create SSE stream
     const stream = new ReadableStream({
-      async start(controller) {
+      start(ctrl) {
+        controller = ctrl;
         const encoder = new TextEncoder();
         
         // Send initial connection success
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
+        const connectionEvent = {
           type: 'connection',
           status: 'connected', 
-          bot_id: botId 
-        })}\n\n`));
+          bot_id: botId
+        };
+        console.log('Sending connection event:', connectionEvent);
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(connectionEvent)}\n\n`));
 
         // Start polling for transcript
-        for await (const data of pollTranscript(botId)) {
-          const message = encoder.encode(`data: ${JSON.stringify(data)}\n\n`);
-          controller.enqueue(message);
+        (async () => {
+          try {
+            for await (const data of pollTranscript(botId, abortController.signal)) {
+              if (controller) {  // Check if controller still exists
+                const message = encoder.encode(`data: ${JSON.stringify(data)}\n\n`);
+                controller.enqueue(message);
+              } else {
+                break;  // Exit if controller is gone
+              }
+            }
+          } catch (error) {
+            console.error('Stream error:', error);
+          }
+        })();
+      },
+
+      cancel() {
+        console.log('Stream cancelled, cleaning up...');
+        controller = null;  // Remove controller reference
+        abortController.abort();  // Stop the polling
+        if (botId) {
+          leaveMeeting(botId).catch(error => {
+            console.error('Error during cleanup:', error);
+          });
         }
       }
     });
@@ -196,6 +188,9 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('Error connecting to meet:', error);
+    if (botId) {
+      await leaveMeeting(botId);
+    }
     return new Response(
       JSON.stringify({ 
         type: 'error',
@@ -208,4 +203,4 @@ Deno.serve(async (req) => {
       }
     );
   }
-})
+});
