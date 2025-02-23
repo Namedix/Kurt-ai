@@ -157,7 +157,8 @@ export async function analyzeTicket(currentContext: string, windowContext: strin
         {
           role: "user",
           content: `Current context (new conversation): "${currentContext}"
-                   Full conversation context: "${windowContext}"
+                   Full conversation context: "${windowContext}",
+                   Today is: "2025-02-23",
                    Current tickets: ${relatedTicketId ? `[{"id": "${relatedTicketId}"}]` : '[]'}`
         }
       ],
