@@ -158,7 +158,6 @@ export async function analyzeTicket(currentContext: string, windowContext: strin
           role: "user",
           content: `Current context (new conversation): "${currentContext}"
                    Full conversation context: "${windowContext}",
-                   Today is: "2025-02-23",
                    Current tickets: ${relatedTicketId ? `[{"id": "${relatedTicketId}"}]` : '[]'}`
         }
       ],
@@ -196,7 +195,9 @@ export async function generateTicket(currentContext: string, windowContext: stri
 Current context: "${currentContext}"
 Previous context: "${windowContext}"
 
-Your task is creating a new ticket.`
+Your task is creating a new ticket.
+Today is: "2025-02-23",
+`
         }
       ],
       temperature: 0.7,
