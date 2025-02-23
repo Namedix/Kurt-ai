@@ -299,7 +299,7 @@ export async function updateLinearTicket(
     }
   };
 }
-
+var didCreate: boolean = false
 // Modify processNewConversation to be more strict about creating new tickets
 export async function processNewConversation(
   currentContext: string, 
@@ -323,10 +323,11 @@ export async function processNewConversation(
   // Otherwise proceed with normal analysis
   const analysis = await analyzeTicket(currentContext, windowContext);
   
-  if (analysis.type_of_action === 'create_new_ticket') {
+  if (analysis.type_of_action === 'create_new_ticket' && didCreate == false) {
     const ticketData = await generateTicket(currentContext, windowContext);
     const ticket = await createLinearTicket(ticketData);
     addToCache(ticket.issue.id, currentContext);
+    didCreate = true
     return {
       type: 'ticket_created',
       ticket
