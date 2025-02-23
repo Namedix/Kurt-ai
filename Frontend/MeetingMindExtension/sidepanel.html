@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Kurt Side Panel</title>
+    <link rel="icon" type="image/png" href="kurt-sq.png">
+    <style>
+        body {
+            padding: 0;
+            margin: 0;
+            font-family: Arial, sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background-color: white;
+        }
+        #notMeetMessage {
+            color: #666;
+            display: none;
+            padding: 20px;
+            text-align: center;
+        }
+        #meetContent {
+            display: none;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .header {
+            text-align: center;
+            flex-shrink: 0;
+            padding: 10px 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0;
+        }
+        .connect-button {
+            background-color: #1a73e8;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 0 0 15px;
+            width: auto;
+            min-width: 150px;
+        }
+        .connect-button:hover {
+            background-color: #1557b0;
+        }
+        #meetingId {
+            margin: 5px 0;
+            color: #666;
+            font-size: 14px;
+        }
+        #connectionStatus {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        .timeline {
+            position: relative;
+            padding-left: 32px;
+            margin-bottom: 100px;
+        }
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 15px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background-color: #e5e7eb;
+        }
+        .timeline-event {
+            position: relative;
+            padding-bottom: 20px;
+            margin-top: 5px;
+        }
+        .timeline-event::before {
+            content: '';
+            position: absolute;
+            left: -32px;
+            top: 0;
+            width: 32px;
+            height: 32px;
+            background-color: #dbeafe;
+            border-radius: 50%;
+            border: 4px solid white;
+            box-sizing: border-box;
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" fill="%231a73e8" viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>');
+            background-size: 16px;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+        .timeline-event.error::before {
+            background-color: #fee2e2;
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" fill="%23dc2626" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>');
+        }
+        .timeline-event.success::before {
+            background-color: #dcfce7;
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" fill="%2322c55e" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>');
+        }
+        .timeline-event .timestamp {
+            display: block;
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 4px;
+        }
+        .timeline-event .content {
+            color: #374151;
+            background-color: #f9fafb;
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+            margin-top: 4px;
+            font-size: 14px;
+        }
+        .status-connecting { color: #f4b400; }
+        .status-connected { color: #0f9d58; }
+        .status-error { color: #db4437; }
+
+        /* Custom scrollbar */
+        .timeline::-webkit-scrollbar {
+            width: 6px;
+        }
+        .timeline::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        .timeline::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 3px;
+        }
+        .timeline::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* Update timeline styles to remove .active class dependency */
+        #timelineMode {
+            display: block;  /* Always show timeline */
+            flex-grow: 1;
+            overflow-y: auto;
+            margin-bottom: 120px;
+        }
+
+        /* Add these styles to your existing CSS */
+        .ticket-link {
+            color: #1a73e8 !important;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .ticket-link:hover {
+            text-decoration: underline;
+        }
+
+        .timeline-event.success .ticket-link {
+            color: #1a73e8 !important;
+        }
+
+        .kurt-logo {
+            width: 100%;
+            height: auto;
+            max-height: 60px;
+            object-fit: contain;
+            margin: 0 0 20px;
+            padding: 0 20px;
+            box-sizing: border-box;
+        }
+
+        /* Add back the wave styles */
+        .wave-container {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 100px;
+            background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(240,244,255,1) 100%);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 1000;
+        }
+
+        .listening-indicator {
+            color: #1a73e8;
+            font-size: 12px;
+            margin-bottom: 10px;
+            opacity: 0.8;
+        }
+
+        .wave-wrapper {
+            height: 40px;
+            width: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .wave {
+            position: absolute;
+            left: -50%;
+            right: -50%;
+            bottom: 0;
+            height: 100%;
+            background-repeat: repeat-x;
+            background-position: 0 bottom;
+            transform-origin: center bottom;
+            will-change: transform;
+        }
+
+        .wave1 {
+            background-image: url('data:image/svg+xml,<svg viewBox="0 0 1440 320" xmlns="http://www.w3.org/2000/svg"><path fill="%231a73e8" fill-opacity="0.3" d="M0,32L48,37.3C96,43,192,53,288,80C384,107,480,149,576,154.7C672,160,768,128,864,112C960,96,1056,96,1152,106.7C1248,117,1344,139,1392,149.3L1440,160L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"></path></svg>');
+            animation: waveLeft 12s cubic-bezier(0.36, 0.45, 0.63, 0.53) infinite;
+            z-index: 3;
+            opacity: 0.8;
+        }
+
+        .wave2 {
+            background-image: url('data:image/svg+xml,<svg viewBox="0 0 1440 320" xmlns="http://www.w3.org/2000/svg"><path fill="%231a73e8" fill-opacity="0.2" d="M0,32L48,37.3C96,43,192,53,288,80C384,107,480,149,576,154.7C672,160,768,128,864,112C960,96,1056,96,1152,106.7C1248,117,1344,139,1392,149.3L1440,160L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"></path></svg>');
+            animation: waveLeft 18s cubic-bezier(0.36, 0.45, 0.63, 0.53) infinite;
+            z-index: 2;
+            opacity: 0.5;
+            animation-delay: -5s;
+        }
+
+        .wave3 {
+            background-image: url('data:image/svg+xml,<svg viewBox="0 0 1440 320" xmlns="http://www.w3.org/2000/svg"><path fill="%231a73e8" fill-opacity="0.1" d="M0,32L48,37.3C96,43,192,53,288,80C384,107,480,149,576,154.7C672,160,768,128,864,112C960,96,1056,96,1152,106.7C1248,117,1344,139,1392,149.3L1440,160L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"></path></svg>');
+            animation: waveLeft 24s cubic-bezier(0.36, 0.45, 0.63, 0.53) infinite;
+            z-index: 1;
+            opacity: 0.3;
+            animation-delay: -2s;
+        }
+
+        @keyframes waveLeft {
+            0% {
+                transform: translateX(25%) translateZ(0);
+            }
+            100% {
+                transform: translateX(-25%) translateZ(0);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="notMeetMessage">
+        <h2>Please Navigate to Google Meet</h2>
+        <p>Kurt only works on Google Meet pages.</p>
+    </div>
+    
+    <div id="meetContent">
+        <div class="header">
+            <img src="kurt-ai.png" alt="Kurt AI" class="kurt-logo">
+            <button id="connectButton" class="connect-button">Connect Kurt!</button>
+            <div id="meetingId"></div>
+            <div id="connectionStatus"></div>
+        </div>
+        <div id="timelineMode" class="timeline"></div>
+    </div>
+
+    <div class="wave-container">
+        <div class="listening-indicator">Kurt is listening</div>
+        <div class="wave-wrapper">
+            <div class="wave wave1"></div>
+            <div class="wave wave2"></div>
+            <div class="wave wave3"></div>
+        </div>
+    </div>
+
+    <script src="sidepanel.js"></script>
+</body>
+</html> 
