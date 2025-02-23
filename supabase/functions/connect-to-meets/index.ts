@@ -45,6 +45,13 @@ async function* pollTranscript(botId: string, signal: AbortSignal) {
             };
           }
 
+          if (result.type === 'ticket_updated' && result.ticket) {
+            yield {
+              type: 'ticket_updated',
+              ticket: result.ticket
+            };
+          }
+
           // Update window context
           windowContext = currentTranscript;
           lastTranscript = currentTranscript;
