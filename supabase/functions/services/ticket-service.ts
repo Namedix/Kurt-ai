@@ -196,7 +196,9 @@ Current context: "${currentContext}"
 Previous context: "${windowContext}"
 
 Your task is creating a new ticket.
-Today is: "2025-02-23",
+Today is: "2025-02-23".
+Bartek's assigneeId is "56286253-7411-466f-83cd-c10a46bed36f".
+Wojtek's assigneeId is "0c3cc9b7-54ee-45af-98c7-89f42687b856".
 `
         }
       ],
